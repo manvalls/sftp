@@ -93,7 +93,7 @@ func (rs *RequestServer) Serve() error {
 			}
 		}()
 	}
-	pktChan := rs.pktMgr.workerChan(runWorker)
+	pktChan := rs.pktMgr.serialChan(runWorker)
 
 	var err error
 	var pkt requestPacket

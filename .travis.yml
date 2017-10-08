@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/pkg/sftp
+go_import_path: github.com/manvalls/sftp
 
 # current and previous stable releases, and tip
 go:

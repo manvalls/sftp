@@ -99,6 +99,25 @@ func (s *packetManager) workerChan(runWorker func(requestChan)) requestChan {
 	return pktChan
 }
 
+func (s *packetManager) serialChan(runWorker func(requestChan)) requestChan {
+
+	channel := make(chan requestPacket)
+	runWorker(channel)
+
+	pktChan := make(chan requestPacket, SftpServerWorkerCount)
+	go func() {
+		for pkt := range pktChan {
+			s.incomingPacket(pkt)
+			channel <- pkt
+		}
+
+		close(channel)
+		s.close()
+	}()
+
+	return pktChan
+}
+
 // process packets
 func (s *packetManager) controller() {
 	for {
