@@ -134,7 +134,9 @@ func (rs *RequestServer) packetWorker(pktChan chan requestPacket) error {
 		case *sshFxpRealpathPacket:
 			rpkt = cleanPacketPath(pkt)
 		case isOpener:
-			handle := rs.nextRequest(requestFromPacket(pkt))
+			request := requestFromPacket(pkt)
+			handle := rs.nextRequest(request)
+			request.call(rs.Handlers, pkt)
 			rpkt = sshFxpHandlePacket{pkt.id(), handle}
 		case *sshFxpFstatPacket:
 			handle := pkt.getHandle()

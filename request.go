@@ -58,6 +58,8 @@ func requestFromPacket(pkt hasPath) *Request {
 		request.Target = cleanPath(p.Newpath)
 	case *sshFxpSymlinkPacket:
 		request.Target = cleanPath(p.Linkpath)
+	case *sshFxpOpenPacket:
+		request.Flags = p.Pflags
 	}
 	return request
 }
@@ -142,7 +144,7 @@ func (r *Request) call(handlers Handlers, pkt requestPacket) responsePacket {
 		return fileget(handlers.FileGet, r, pd)
 	case "Put": // add "Append" to this to handle append only file writes
 		return fileput(handlers.FilePut, r, pd)
-	case "Setstat", "Rename", "Rmdir", "Mkdir", "Symlink", "Remove":
+	case "Setstat", "Rename", "Rmdir", "Mkdir", "Symlink", "Remove", "Open":
 		return filecmd(handlers.FileCmd, r, pd)
 	case "List", "Stat", "Readlink":
 		return filelist(handlers.FileList, r, pd)
