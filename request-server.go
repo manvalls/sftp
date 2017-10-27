@@ -124,6 +124,9 @@ func (rs *RequestServer) Serve() error {
 func (rs *RequestServer) packetWorker(pktChan chan requestPacket) error {
 	for pkt := range pktChan {
 		var rpkt responsePacket
+
+		doNotAnswer := false
+
 		switch pkt := pkt.(type) {
 		case *sshFxInitPacket:
 			rpkt = sshFxVersionPacket{sftpProtocolVersion, nil}
@@ -146,7 +149,8 @@ func (rs *RequestServer) packetWorker(pktChan chan requestPacket) error {
 			} else {
 				request = requestFromPacket(
 					&sshFxpStatPacket{ID: pkt.id(), Path: request.Filepath})
-				rpkt = request.call(rs.Handlers, pkt)
+				doNotAnswer = true
+				request.handle(rs, pkt)
 			}
 		case *sshFxpFsetstatPacket:
 			handle := pkt.getHandle()
@@ -158,7 +162,8 @@ func (rs *RequestServer) packetWorker(pktChan chan requestPacket) error {
 					&sshFxpSetstatPacket{ID: pkt.id(), Path: request.Filepath,
 						Flags: pkt.Flags, Attrs: pkt.Attrs,
 					})
-				rpkt = request.call(rs.Handlers, pkt)
+				doNotAnswer = true
+				request.handle(rs, pkt)
 			}
 		case hasHandle:
 			handle := pkt.getHandle()
@@ -170,20 +175,25 @@ func (rs *RequestServer) packetWorker(pktChan chan requestPacket) error {
 				}
 				rpkt = statusFromError(pkt, syscall.EBADF)
 			} else {
-				rpkt = request.call(rs.Handlers, pkt)
+				doNotAnswer = true
+				request.handle(rs, pkt)
 			}
 		case hasPath:
 			request := requestFromPacket(pkt)
-			rpkt = request.call(rs.Handlers, pkt)
+			doNotAnswer = true
+			request.handle(rs, pkt)
 		default:
 			return errors.Errorf("unexpected packet type %T", pkt)
 		}
 
-		err := rs.sendPacket(rpkt)
-		if err != nil {
-			return err
+		if !doNotAnswer {
+			err := rs.sendPacket(rpkt)
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 

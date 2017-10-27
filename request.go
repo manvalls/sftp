@@ -24,8 +24,10 @@ type Request struct {
 	Attrs    []byte // convert to sub-struct
 	Target   string // for renames and sym-links
 	// reader/writer/readdir from handlers
-	stateLock *sync.RWMutex
-	state     *state
+	stateLock  *sync.RWMutex
+	state      *state
+	channel    chan args
+	handleLock *sync.Mutex
 }
 
 type state struct {
@@ -33,6 +35,11 @@ type state struct {
 	readerAt io.ReaderAt
 	listerAt ListerAt
 	lsoffset int64
+}
+
+type args struct {
+	rs  *RequestServer
+	pkt requestPacket
 }
 
 type packet_data struct {
@@ -65,7 +72,7 @@ func requestFromPacket(pkt hasPath) *Request {
 }
 
 func newRequest() *Request {
-	return &Request{state: &state{}, stateLock: &sync.RWMutex{}}
+	return &Request{state: &state{}, stateLock: &sync.RWMutex{}, handleLock: &sync.Mutex{}}
 }
 
 // NewRequest creates a new Request object.
@@ -134,6 +141,29 @@ func (r *Request) close() {
 	if c, ok := wt.(io.Closer); ok {
 		c.Close()
 	}
+
+	if r.channel != nil {
+		close(r.channel)
+	}
+}
+
+func (r *Request) handle(rs *RequestServer, pkt requestPacket) {
+	r.handleLock.Lock()
+
+	if r.channel == nil {
+		c := make(chan args, 5)
+		r.channel = c
+
+		go func() {
+			for args := range c {
+				rpkt := r.call(args.rs.Handlers, args.pkt)
+				rs.sendPacket(rpkt)
+				r.handleLock.Unlock()
+			}
+		}()
+	}
+
+	r.channel <- args{rs: rs, pkt: pkt}
 }
 
 // called from worker to handle packet/request
@@ -307,6 +337,9 @@ func filelist(h FileLister, r *Request, pd packet_data) responsePacket {
 
 // file data for additional read/write packets
 func (r *Request) updateMethod(p hasHandle) error {
+	r.handleLock.Lock()
+	defer r.handleLock.Unlock()
+
 	switch p := p.(type) {
 	case *sshFxpReadPacket:
 		r.Method = "Get"
