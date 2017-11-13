@@ -147,23 +147,39 @@ func (r *Request) close() {
 	}
 }
 
+func (r *Request) processArgs(args args) {
+	rpkt := r.call(args.rs.Handlers, args.pkt)
+	args.rs.sendPacket(rpkt)
+	r.handleLock.Unlock()
+}
+
 func (r *Request) handle(rs *RequestServer, pkt requestPacket) {
 	r.handleLock.Lock()
 
-	if r.channel == nil {
-		c := make(chan args, 5)
-		r.channel = c
+	a := args{rs: rs, pkt: pkt}
 
-		go func() {
-			for args := range c {
-				rpkt := r.call(args.rs.Handlers, args.pkt)
-				rs.sendPacket(rpkt)
-				r.handleLock.Unlock()
-			}
-		}()
+	switch r.Method {
+
+	case "Get", "Put":
+
+		if r.channel == nil {
+			c := make(chan args, 5)
+			r.channel = c
+
+			go func() {
+				for args := range c {
+					r.processArgs(args)
+				}
+			}()
+		}
+
+		r.channel <- a
+
+	default:
+		r.processArgs(a)
+
 	}
 
-	r.channel <- args{rs: rs, pkt: pkt}
 }
 
 // called from worker to handle packet/request
