@@ -26,7 +26,6 @@ type Request struct {
 	// reader/writer/readdir from handlers
 	stateLock  *sync.RWMutex
 	state      *state
-	channel    chan args
 	handleLock *sync.Mutex
 }
 
@@ -35,6 +34,7 @@ type state struct {
 	readerAt io.ReaderAt
 	listerAt ListerAt
 	lsoffset int64
+	channel  chan args
 }
 
 type args struct {
@@ -134,8 +134,8 @@ func (r *Request) getLister() ListerAt {
 // Close reader/writer if possible
 func (r *Request) close() error {
 
-	if r.channel != nil {
-		close(r.channel)
+	if r.state.channel != nil {
+		close(r.state.channel)
 	}
 
 	rd := r.getReader()
@@ -166,9 +166,9 @@ func (r *Request) handle(rs *RequestServer, pkt requestPacket) {
 
 	case "Get", "Put":
 
-		if r.channel == nil {
+		if r.state.channel == nil {
 			c := make(chan args, 5)
-			r.channel = c
+			r.state.channel = c
 
 			go func() {
 				for args := range c {
@@ -177,7 +177,7 @@ func (r *Request) handle(rs *RequestServer, pkt requestPacket) {
 			}()
 		}
 
-		r.channel <- a
+		r.state.channel <- a
 
 	default:
 		r.processArgs(a)
