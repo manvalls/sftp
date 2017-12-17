@@ -132,19 +132,23 @@ func (r *Request) getLister() ListerAt {
 }
 
 // Close reader/writer if possible
-func (r *Request) close() {
-	rd := r.getReader()
-	if c, ok := rd.(io.Closer); ok {
-		c.Close()
-	}
-	wt := r.getWriter()
-	if c, ok := wt.(io.Closer); ok {
-		c.Close()
-	}
+func (r *Request) close() error {
 
 	if r.channel != nil {
 		close(r.channel)
 	}
+
+	rd := r.getReader()
+	if c, ok := rd.(io.Closer); ok {
+		return c.Close()
+	}
+
+	wt := r.getWriter()
+	if c, ok := wt.(io.Closer); ok {
+		return c.Close()
+	}
+
+	return nil
 }
 
 func (r *Request) processArgs(args args) {
